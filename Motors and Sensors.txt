@@ -1,0 +1,273 @@
+'''
+Code to control motor and move depending on the ultrasonic sensors
+''' 
+
+#!/usr/bin/python3
+
+import time
+import RPi.GPIO as GPIO
+import datetime
+import GP2Y
+
+GPIO.setmode(GPIO.BCM)
+
+PIN_TRIGGER_1 = 8
+PIN_TRIGGER_2 = 15
+PIN_ECHO_1 = 7
+PIN_ECHO_2 = 14
+compensation = 11
+
+STBY = 23
+PWMA = 20
+PWMB = 27
+AIN1 = 22
+AIN2 = 21
+BIN1 = 24
+BIN2 = 25
+
+GPIO.setup(STBY, GPIO.OUT)
+
+#Motor A:
+GPIO.setup(PWMA, GPIO.OUT)
+GPIO.setup(AIN1, GPIO.OUT)
+GPIO.setup(AIN2, GPIO.OUT)
+
+#Motor B:
+GPIO.setup(PWMB, GPIO.OUT)
+GPIO.setup(BIN1, GPIO.OUT)
+GPIO.setup(BIN2, GPIO.OUT)
+
+
+GPIO.setup(PIN_TRIGGER_1, GPIO.OUT)
+GPIO.setup(PIN_TRIGGER_2, GPIO.OUT)
+GPIO.setup(PIN_ECHO_1, GPIO.IN)
+GPIO.setup(PIN_ECHO_2, GPIO.IN)
+GPIO.output(PIN_TRIGGER_1, False)
+GPIO.output(PIN_TRIGGER_2, False)
+print("Waiting for sensor to settle")
+time.sleep(2)
+pwma = GPIO.PWM(PWMA, 25)
+pwmb = GPIO.PWM(PWMB, 25)
+
+def move_straight(distance):
+	rotations = distance / 0.157
+	pwma.start(25)
+	pwmb.start(25)
+	
+	left_steps = rotations * 48
+	right_steps = rotations * 48
+
+	if left_rotations > 0:
+		GPIO.output(AIN1, True)
+		GPIO.output(AIN2, False)
+		GPIO.output(BIN1, True)
+		GPIO.output(BIN2, False)
+
+	if right_rotations > 0:
+		
+		GPIO.output(AIN1, False)
+		GPIO.output(AIN2, True)
+		GPIO.output(BIN1, False)
+		GPIO.output(BIN2, True)
+
+#Get IR sensor reading
+def IR_sensor():
+
+	GP2Y.distcalc()
+	print (GP2Y.distcalc())
+
+	return GP2Y.distcalc()
+
+def move_forward():
+
+	pwma.start(50)
+	pwmb.start(50)
+
+	GPIO.output(STBY, True)
+	GPIO.output(AIN1, False)
+	GPIO.output(AIN2, True)
+	GPIO.output(BIN1, True)
+	GPIO.output(BIN2, False)
+
+	GPIO.output(PWMA, True)
+	GPIO.output(PWMB, True)
+
+	time.sleep(0.001)
+
+
+def move_left():
+
+	pwma.start(25)
+	pwmb.start(25)
+
+	GPIO.output(STBY, True)
+	GPIO.output(AIN1, True)
+	GPIO.output(AIN2, False)
+	GPIO.output(BIN1, True)
+	GPIO.output(BIN2, False)
+
+	GPIO.output(PWMA, True)
+	GPIO.output(PWMB, True)
+
+	time.sleep(0.9)
+
+
+def move_right():
+
+	pwma.start(25)
+	pwmb.start(25)
+
+	GPIO.output(STBY, True)
+	GPIO.output(AIN1, False)
+	GPIO.output(AIN2, True)
+	GPIO.output(BIN1, False)
+	GPIO.output(BIN2, True)
+
+	GPIO.output(PWMA, True)
+	GPIO.output(PWMB, True)
+
+	time.sleep(0.9)
+
+def motor_stop():
+
+	pwma.start(0)
+	pwmb.start(0)
+
+	GPIO.output(STBY, False)
+	GPIO.output(AIN1, False)
+	GPIO.output(AIN2, False)
+	GPIO.output(BIN1, False)
+	GPIO.output(BIN2, False)
+
+	GPIO.output(PWMA, False)
+	GPIO.output(PWMB, False)
+
+	time.sleep(0.001)
+
+def motor_slow():
+
+	pwma.start(25)
+	pwmb.start(25)
+
+	GPIO.output(STBY, True)
+	GPIO.output(AIN1, False)
+	GPIO.output(AIN2, True)
+	GPIO.output(BIN1, True)
+	GPIO.output(BIN2, False)
+
+	GPIO.output(PWMA, True)
+	GPIO.output(PWMB, True)
+
+	time.sleep(0.001)
+
+#get ultrasonic sensor reading on right 
+def ultrasonic_sensor_right():
+
+	GPIO.output(PIN_TRIGGER_1, True)
+	time.sleep(0.00001)
+	GPIO.output(PIN_TRIGGER_1, False)
+
+	start_right= time.time()
+	stop_right = time.time()
+
+	while GPIO.input(PIN_ECHO_1)==0:
+		start_right = time.time()
+
+	while GPIO.input(PIN_ECHO_1)==1:
+		stop_right = time.time()
+
+	elapsed_right = stop_right - start_right
+	distance_right = elapsed_right * 17150
+	distance_right = distance_right + compensation
+	time.sleep(0)
+	return distance_right
+
+#get ultrasonic sensor reading on left
+def ultrasonic_sensor_left():
+
+	GPIO.output(PIN_TRIGGER_2, True)
+	time.sleep(0.00001)
+	GPIO.output(PIN_TRIGGER_2, False)
+
+	start_left = time.time()
+	stop_left = time.time()
+
+	while GPIO.input(PIN_ECHO_2)==0:
+		start_left = time.time()
+
+
+	while GPIO.input(PIN_ECHO_2)==1:
+		stop_left = time.time()
+
+
+	elapsed_left = stop_left - start_left
+	distance_left = elapsed_left * 17150
+	distance_left = distance_left + compensation
+	time.sleep(0)
+	return distance_left
+
+
+def motor():
+
+	try: 
+		while True:
+
+			if ultrasonic_sensor_right() <=20  and ultrasonic_sensor_right() >= 5:
+				#print datetime.datetime.now(), "Distance right = {}".format(round(ultrasonic_sensor_right(), 2))
+				move_left()
+				motor_stop()
+				#motor_stop()
+				time.sleep(0.001)
+
+
+			elif IR_sensor() <= 15:
+
+				motor_slow()
+
+
+				if ultrasonic_sensor_right() <= 20  and ultrasonic_sensor_right() >= 5:
+					#print datetime.datetime.now(), "Distance right = {}".format(round(ultrasonic_sensor_right(), 2))
+					move_left()
+					#time.sleep(2)
+					motor_stop()
+					#motor_stop()
+					time.sleep(0.001)
+
+				elif ultrasonic_sensor_left() <= 30 and ultrasonic_sensor_left() >=15:
+					#print datetime.datetime.now(), "Distance left = {}".format(round(ultrasonic_sensor_left(), 2))
+					move_right()
+					#time.sleep(2)
+					motor_stop()
+					#motor_stop()
+					time.sleep(0.001)
+
+				else:
+					move_right()
+					#time.sleep(2)
+					motor_stop()
+					#motor_stop()
+					time.sleep(0.001)
+
+
+			elif ultrasonic_sensor_left() <=20 and ultrasonic_sensor_left() >=10:
+				#print datetime.datetime.now(), "Distance left = {}".format(round(ultrasonic_sensor_left(), 2))
+				#motor_stop()
+				move_right()
+				motor_stop()
+				time.sleep(0.001)
+
+			else:
+				move_forward()
+				IR_sensor()
+
+
+	except KeyboardInterrupt:
+		print ("clean exit by user")
+
+	#finally:
+	#else:
+		#GPIO.cleanup()
+
+if __name__ == "__main__":
+
+	motor()

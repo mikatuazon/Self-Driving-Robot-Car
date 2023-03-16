@@ -1,0 +1,202 @@
+'''
+Code to call the motor function to move depending on the camera and call the previous code file when camera does not detect something
+''' 
+
+# Import the necessary packages
+import picamera
+import picamera.array
+import time
+import cv2
+from cv2 import aruco
+import numpy as np
+from combination import *
+
+
+# Initialise the camera and create a reference to it
+camera = picamera.PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+camera.rotation = 180
+rawCapture = picamera.array.PiRGBArray(camera, size=camera.resolution)
+
+# Allow the camera time to warm up
+time.sleep(0.1)
+
+# Setup aruco dictionary and parameters
+aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)
+aruco_parameters = aruco.DetectorParameters_create()
+
+center_x = 640/2
+center_y = 480/2
+
+sense_loc =[]
+
+def get_marker_position(corners): #get center x,y of id 
+
+    # Calculate the center of the marker
+    marker_center = np.mean(corners, axis=0)
+	
+    # Extract x, y coordinates
+    x = marker_center[0][0]
+    y = marker_center[0][1]
+    return x, y
+
+
+def location(): #get location using ultrasonic sensors
+	left_distance = ultrasonic_sensor_left()
+	right_distance = ultrasonic_sensor_right()
+	sense_loc.append((left_distance, right_distance))
+	
+
+def move_towards_marker(x, y): # robot to proceed to the goal while keeping it in the middle 
+
+	reached = False
+ 	
+	if x[0] < 300 and x[0] > 50:
+		move_left()
+		if ultrasonic_sensor_left() <=25:
+			location()
+			move_right()
+			
+
+	elif x[0] > 330 and x[0] < 590:
+		move_right()
+		if ultrasonic_sensor_right() <=20:
+			location()
+			move_left()
+			
+
+
+	elif x[0] >= 300 and x[0] <= 330:
+		move_forward()
+		if IR_sensor() <= 20:
+			reached = True
+			location()
+
+
+	return reached
+
+def move_to(left, right): #Optimal path 
+	current_left = 0
+	current_right = 0
+	
+	distance = math.sqrt((left-current_left) **2 + (right-current_right) **2)
+	angle = math.atan2(current_right, current_left)
+	move_straight(distance) 
+	current_left = left
+	current_right = right 
+	
+
+def main():
+
+	# Create counter for FPS
+	frame_count = 0
+	start_time = time.time()
+	found_id3 = False
+	found_id5 = False
+	found_id = False
+
+	# Capture frames from the camera
+	for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
+    	image = frame.array
+    	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    	corners,ids,rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=aruco_parameters)
+    
+    	frame_markers = aruco.drawDetectedMarkers(image, corners, ids)
+   
+    	frame_count += 1
+    	average_fps = frame_count / ( time.time() - start_time )
+    	cv2.putText(frame_markers,"%2.1f fps" % average_fps, (50,50),cv2.FONT_HERSHEY_SIMPLEX,1,(0,255,255),2,cv2.LINE_AA)
+    
+    	specific_corners = []
+		print(ids)
+		if ids is not None:
+			for i in range(len(ids)):
+
+				mark = ids[i][0]
+				if mark == 3 and not found_id3:
+					specific_corners.append(corners[i])
+					#print(specific_corners)
+
+					x,y = get_marker_position(specific_corners)
+					#move_towards_marker(x,y)
+					print(x)
+
+					
+					if move_towards_marker(x,y):
+						motor()
+						found_id3 = True
+
+				if mark == 6:
+					move_left()
+				
+									
+				elif mark == 5 and found_id3 and not found_id5:
+					specific_corners.append(corners[i])
+					print(specific_corners)
+
+					x,y = get_marker_position(specific_corners)
+					move_towards_marker(x,y)
+
+					
+					#if move_towards_marker(x,y):
+						#found_id5 = True
+
+									
+
+				elif mark == 2 and not found_id:
+					specific_corners.append(corners[i])
+					print(specific_corners)
+
+					x,y = get_marker_position(specific_corners)
+					#move_towards_marker(x,y)
+
+					
+					if move_towards_marker(x,y):
+
+						found_id = True
+
+				elif mark == 1 and not found_id:
+					specific_corners.append(corners[i])
+					print(specific_corners)
+
+					x,y = get_marker_position(specific_corners)
+					#move_towards_marker(x,y)
+
+					
+					if move_towards_marker(x,y):
+						
+						found_id = True
+
+				elif mark == 4 and found_id and not found_id:
+					specific_corners.append(corners[i])
+					print(specific_corners)
+
+					x,y = get_marker_position(specific_corners)
+					#move_towards_marker(x,y)
+
+					
+					if move_towards_marker(x,y):
+						for location in sense_loc[::-1]:
+							x,y = location
+							move_to(x,y)
+					break	
+	
+				else:
+					motor()				
+				
+
+    # Show the frame
+    		cv2.imshow("Frame", frame_markers)
+
+    # Clear the stream in preparation for the next frame
+    		rawCapture.truncate(0)
+
+    # if the `q` key was pressed, break from the loop
+    		if cv2.waitKey(1) & 0xFF == ord("q"):
+        		break
+
+if __name__ == "__main__":
+
+	main()
+	
